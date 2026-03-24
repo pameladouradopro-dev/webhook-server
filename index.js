@@ -8,11 +8,9 @@ app.use(express.json());
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_KEY;
 const PAYHIP_SECRET = process.env.PAYHIP_SECRET;
 
-// Simple protection against duplicate orders
 const processedOrders = new Set();
 
 app.post("/webhook", async (req, res) => {
-  // 1. Verify signature (security)
   const signature = req.headers["x-payhip-signature"];
   const rawBody = JSON.stringify(req.body);
 
@@ -26,13 +24,11 @@ app.post("/webhook", async (req, res) => {
     return res.status(401).send("Invalid signature");
   }
 
-  // 2. Only process paid events
   if (req.body.event !== "paid") {
     console.log("Event ignored:", req.body.event);
     return res.sendStatus(200);
   }
 
-  // 3. Avoid duplicate orders
   const saleId = req.body.sale_id;
 
   if (processedOrders.has(saleId)) {
@@ -44,14 +40,12 @@ app.post("/webhook", async (req, res) => {
 
   console.log("New order received:", JSON.stringify(req.body, null, 2));
 
-  // 4. Build items for Printify
   const items = req.body.products.map((product) => ({
     product_id: product.product_id,
     variant_id: product.sku,
     quantity: product.quantity
   }));
 
-  // 5. Create order on Printify
   try {
     const response = await fetch("https://api.printify.com/v1/orders.json", {
       method: "POST",
@@ -92,7 +86,8 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-//app.get("/get-shop-id", async (req, res) => {
+// Rota temporaria para descobrir SHOP_ID - APAGAR DEPOIS
+app.get("/get-shop-id", async (req, res) => {
   try {
     const response = await fetch("https://api.printify.com/v1/shops.json", {
       headers: {
@@ -108,7 +103,6 @@ app.post("/webhook", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Webhook active on port ${PORT}`);
+  console.log(`Webhook ativo na porta ${PORT}`);
 });
