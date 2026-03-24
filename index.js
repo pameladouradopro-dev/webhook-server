@@ -8,7 +8,11 @@ app.use(express.json());
 const PRINTIFY_API_KEY = process.env.PRINTIFY_API_KEY;
 const PAYHIP_SECRET = process.env.PAYHIP_SECRET;
 
+// Simple protection against duplicate orders
+const processedOrders = new Set();
+
 app.post("/webhook", async (req, res) => {
+  // 1. Verify signature (security)
   const signature = req.headers["x-payhip-signature"];
   const rawBody = JSON.stringify(req.body);
 
@@ -18,45 +22,78 @@ app.post("/webhook", async (req, res) => {
     .digest("hex");
 
   if (expected !== signature) {
+    console.log("Invalid signature, ignoring.");
     return res.status(401).send("Invalid signature");
   }
 
-  console.log("Novo pedido recebido:", req.body);
+  // 2. Only process paid events
+  if (req.body.event !== "paid") {
+    console.log("Event ignored:", req.body.event);
+    return res.sendStatus(200);
+  }
 
+  // 3. Avoid duplicate orders
+  const saleId = req.body.sale_id;
+
+  if (processedOrders.has(saleId)) {
+    console.log("Duplicate order, ignoring:", saleId);
+    return res.sendStatus(200);
+  }
+
+  processedOrders.add(saleId);
+
+  console.log("New order received:", JSON.stringify(req.body, null, 2));
+
+  // 4. Build items for Printify
   const items = req.body.products.map((product) => ({
     product_id: product.product_id,
     variant_id: product.sku,
     quantity: product.quantity
   }));
 
-  await fetch("https://api.printify.com/v1/orders.json", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${PRINTIFY_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      external_id: req.body.sale_id,
-      line_items: items,
-      shipping_method: 1,
-      send_shipping_notification: true,
-      address_to: {
-        first_name: req.body.customer.first_name,
-        last_name: req.body.customer.last_name,
-        email: req.body.customer.email,
-        address1: req.body.customer.address_line_1,
-        city: req.body.customer.city,
-        country: req.body.customer.country,
-        zip: req.body.customer.zip
-      }
-    })
-  });
+  // 5. Create order on Printify
+  try {
+    const response = await fetch("https://api.printify.com/v1/orders.json", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PRINTIFY_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        external_id: saleId,
+        line_items: items,
+        shipping_method: 1,
+        send_shipping_notification: true,
+        address_to: {
+          first_name: req.body.customer.first_name,
+          last_name: req.body.customer.last_name,
+          email: req.body.customer.email,
+          address1: req.body.customer.address_line_1,
+          city: req.body.customer.city,
+          country: req.body.customer.country,
+          zip: req.body.customer.zip
+        }
+      })
+    });
+
+    const data = await response.json();
+    console.log("Printify response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      console.error("Printify error:", data);
+      return res.status(500).send("Error creating order");
+    }
+
+  } catch (error) {
+    console.error("Unexpected error:", error);
+    return res.status(500).send("Internal error");
+  }
 
   res.sendStatus(200);
 });
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Webhook ativo na porta ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Webhook active on port ${PORT}`);
 });
