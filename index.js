@@ -86,7 +86,7 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// Rota temporaria para descobrir SHOP_ID - APAGAR DEPOIS
+// 🔹 Rota temporária para descobrir SHOP_ID – vamos apagar depois
 app.get("/get-shop-id", async (req, res) => {
   try {
     const response = await fetch("https://api.printify.com/v1/shops.json", {
@@ -103,6 +103,7 @@ app.get("/get-shop-id", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Webhook ativo na porta ${PORT}`);
 });
