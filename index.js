@@ -10,34 +10,34 @@ const PAYHIP_SECRET = process.env.PAYHIP_SECRET;
 
 app.post("/webhook", async (req, res) => {
   const signature = req.headers["x-payhip-signature"];
-  const body = JSON.stringify(req.body);
+  const rawBody = JSON.stringify(req.body);
 
-  const hash = crypto
+  const expected = crypto
     .createHmac("sha256", PAYHIP_SECRET)
-    .update(body)
+    .update(rawBody)
     .digest("hex");
 
-  if (hash !== signature) {
+  if (expected !== signature) {
     return res.status(401).send("Invalid signature");
   }
 
-  console.log("Pagamento recebido:", req.body);
+  console.log("Novo pedido recebido:", req.body);
+
+  const items = req.body.products.map((product) => ({
+    product_id: product.product_id,
+    variant_id: product.sku,
+    quantity: product.quantity
+  }));
 
   await fetch("https://api.printify.com/v1/orders.json", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${PRINTIFY_API_KEY}`,
+      Authorization: `Bearer ${PRINTIFY_API_KEY}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
       external_id: req.body.sale_id,
-      line_items: [
-        {
-          product_id: "COLOCAR_PRODUCT_ID",
-          variant_id: "COLOCAR_VARIANT_ID",
-          quantity: 1
-        }
-      ],
+      line_items: items,
       shipping_method: 1,
       send_shipping_notification: true,
       address_to: {
@@ -56,5 +56,5 @@ app.post("/webhook", async (req, res) => {
 });
 
 app.listen(3000, () => {
-  console.log("Servidor rodando na porta 3000");
+  console.log("Webhook ativo na porta 3000");
 });
