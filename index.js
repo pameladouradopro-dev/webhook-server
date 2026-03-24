@@ -92,6 +92,21 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
+//app.get("/get-shop-id", async (req, res) => {
+  try {
+    const response = await fetch("https://api.printify.com/v1/shops.json", {
+      headers: {
+        Authorization: `Bearer ${PRINTIFY_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
